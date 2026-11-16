@@ -10,7 +10,7 @@ Questions, problems, corrections and pull requests are welcome.
 
 ## Set up
 
-[Build from source](README.md#build-from-source) in the README lists what to
+[The repository](README.md#the-repository) in the README lists what to
 install and the commands to build, test and run both apps.
 
 ## Pull requests
@@ -37,5 +37,5 @@ any output you paste.
 
 ## License
 
-The project is [0BSD](LICENSE). By contributing, you agree that your
+The project is [Apache-2.0](LICENSE). By contributing, you agree that your
 contribution is released under the same license.

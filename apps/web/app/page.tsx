@@ -1,13 +1,16 @@
 import Image from "next/image";
 import BoxStory from "./box-story";
+import DemoVideo from "./demo-video";
 import { SiteFooter } from "./info-page";
 import { GitHubIcon } from "./site-header";
+import { CARD, CONTAINER, SECTION_BODY, SECTION_BOTTOM, SECTION_LEAD, SECTION_TITLE, SECTION_Y } from "./ui";
 import {
   REPO,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_TITLE,
   SITE_URL,
+  demoVideo,
   faqs,
   hero,
   status,
@@ -52,6 +55,7 @@ const jsonLd = {
       author: { "@id": `${SITE_URL}/#author` },
       hasPart: [
         { "@id": `${SITE_URL}/#how-it-works` },
+        { "@id": `${SITE_URL}/#video` },
         { "@id": `${SITE_URL}/#why-it-matters` },
         { "@id": `${SITE_URL}/#faq` },
       ],
@@ -60,7 +64,7 @@ const jsonLd = {
       "@type": "Person",
       "@id": `${SITE_URL}/#author`,
       name: "Matt Lewis",
-      description: `Maker and maintainer of the ${SITE_NAME}. It is an independent, open-source project that measures home internet for NYCHA residents.`,
+      description: `Matt Lewis makes and maintains the ${SITE_NAME} as an independent, open-source project that measures home internet for NYCHA residents.`,
       url: "https://github.com/malewis5",
       sameAs: AUTHOR_PROFILES,
     },
@@ -69,7 +73,7 @@ const jsonLd = {
       "@id": `${SITE_URL}/#software`,
       name: SITE_NAME,
       description:
-        "Open-source program that measures home internet speed, latency and reliability around the clock and saves the results as evidence.",
+        "An open-source program that measures home internet speed, latency and reliability on a regular schedule and saves the results on your own computer.",
       applicationCategory: "UtilitiesApplication",
       operatingSystem: "macOS, Linux, Raspberry Pi OS",
       isAccessibleForFree: true,
@@ -97,6 +101,36 @@ const jsonLd = {
         name: step.title,
         text: step.body,
       })),
+    },
+    // The demo video, with its captions as the transcript, so search engines
+    // and AI answer engines can show and quote it.
+    {
+      "@type": "VideoObject",
+      "@id": `${SITE_URL}/#video`,
+      name: `${SITE_NAME}: ${demoVideo.title}`,
+      description: demoVideo.body,
+      thumbnailUrl: [`${SITE_URL}${demoVideo.files.thumbnail}`, `${SITE_URL}${demoVideo.files.poster}`],
+      uploadDate: demoVideo.uploaded,
+      duration: demoVideo.duration,
+      contentUrl: `${SITE_URL}${demoVideo.files.mp4}`,
+      encodingFormat: "video/mp4",
+      width: 1280,
+      height: 720,
+      inLanguage: "en-US",
+      isFamilyFriendly: true,
+      isAccessibleForFree: true,
+      transcript: demoVideo.transcript.join(" "),
+      caption: {
+        "@type": "MediaObject",
+        contentUrl: `${SITE_URL}${demoVideo.files.captions}`,
+        encodingFormat: "text/vtt",
+        inLanguage: "en-US",
+      },
+      url: `${SITE_URL}/#demo`,
+      isPartOf: { "@id": `${SITE_URL}/#webpage` },
+      about: { "@id": `${SITE_URL}/#software` },
+      creator: { "@id": `${SITE_URL}/#author` },
+      publisher: { "@id": `${SITE_URL}/#author` },
     },
     // The three cards under "Why it matters".
     {
@@ -131,17 +165,22 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
       <main id="main" tabIndex={-1} className="outline-none">
-        <section className="flex min-h-[calc(100svh-5rem)] flex-col items-center justify-center px-6 pb-20 text-center">
-          <p className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+        <section className="flex min-h-[calc(100svh-4.25rem)] flex-col items-center justify-center px-6 pb-16 text-center sm:pb-20">
+          <p className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">
             {hero.eyebrow}
           </p>
-          <h1 className="mt-6 max-w-4xl text-5xl font-semibold tracking-tight text-balance sm:text-7xl">
-            {hero.title}
+          {/* Two lines on every screen. The longer line is about 10em wide, so
+              the size is a tenth of the column (the screen less its 3rem of
+              padding), between 1.75rem and the desktop's 4.5rem. On the very
+              narrowest screens the second line may still wrap, evenly. */}
+          <h1 className="mt-6 w-full max-w-4xl text-[clamp(1.75rem,calc((100vw_-_3rem)/10),4.5rem)] leading-[1.05] font-semibold tracking-tight text-balance break-words">
+            <span className="block">{hero.titleLines[0]}</span>{" "}
+            <span className="block">{hero.titleLines[1]}</span>
           </h1>
-          <p className="mt-6 max-w-2xl text-xl leading-relaxed text-pretty text-zinc-500 sm:text-2xl">{hero.body}</p>
-          <div className="mt-16 flex flex-col items-center gap-2 text-sm text-zinc-500" aria-hidden="true">
+          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-zinc-600 sm:text-2xl">{hero.body}</p>
+          <div className="mt-12 flex flex-col items-center gap-2 text-sm text-zinc-600" aria-hidden="true">
             Scroll to see how it works
-            <svg viewBox="0 0 20 20" className="size-5 motion-safe:animate-bounce" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg viewBox="0 0 20 20" className="size-5 motion-safe:animate-bounce motion-safe:[animation-iteration-count:3]" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
@@ -149,17 +188,19 @@ export default function Home() {
 
         <BoxStory />
 
-        <section className="bg-gradient-to-b from-white to-zinc-50 px-6 py-32">
-          <div className="mx-auto max-w-6xl">
-            <h2 className="text-4xl font-semibold tracking-tight sm:text-6xl">{whyItMatters.title}</h2>
-            <p className="mt-4 max-w-2xl text-xl leading-relaxed text-zinc-500">{whyItMatters.body}</p>
-            <div className="mt-16 grid gap-6 md:grid-cols-3">
+        <DemoVideo />
+
+        <section className={`bg-gradient-to-b from-white to-zinc-50 ${SECTION_Y}`}>
+          <div className={CONTAINER}>
+            <h2 className={SECTION_TITLE}>{whyItMatters.title}</h2>
+            <p className={SECTION_LEAD}>{whyItMatters.body}</p>
+            <div className={`${SECTION_BODY} grid gap-4 sm:gap-6 md:grid-cols-3`}>
               {whyItMatters.reasons.map((reason) => (
                 <div
                   key={reason.title}
-                  className="rounded-3xl bg-white p-8 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_16px_40px_-20px_rgb(0_0_0/0.18)] ring-1 ring-zinc-900/5"
+                  className={`min-w-0 p-6 break-words sm:p-8 ${CARD}`}
                 >
-                  <Image src={reason.icon} alt="" width={480} height={480} className="-mt-4 -ml-4 size-48" />
+                  <Image src={reason.icon} alt="" width={480} height={480} className="-mt-3 -ml-3 size-32 max-w-full sm:-mt-4 sm:-ml-4 sm:size-48" />
                   <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-semibold">
                     {reason.title}
                     {reason.later && (
@@ -168,34 +209,39 @@ export default function Home() {
                       </span>
                     )}
                   </h3>
-                  <p className="mt-3 text-lg leading-relaxed text-zinc-500">{reason.body}</p>
+                  <p className="mt-2 text-lg leading-relaxed text-zinc-600 sm:mt-3">{reason.body}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="bg-zinc-50 px-6 pb-32">
-          <div className="mx-auto max-w-3xl rounded-3xl bg-white px-8 py-14 text-center shadow-[0_1px_2px_rgb(0_0_0/0.04),0_16px_40px_-20px_rgb(0_0_0/0.18)] ring-1 ring-zinc-900/5 sm:px-16">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">{status.title}</h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-zinc-500">{status.body}</p>
-            <a
-              href={REPO}
-              className="mt-8 inline-flex items-center gap-2 rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700"
-            >
-              <GitHubIcon className="size-4" />
-              Follow along on GitHub
-            </a>
+        {/* Part of "Why it matters" above, so it follows on without a full gap. */}
+        <section className={`bg-zinc-50 ${SECTION_BOTTOM}`}>
+          <div className={CONTAINER}>
+            <div className={`p-6 sm:p-12 lg:flex lg:items-center lg:justify-between lg:gap-12 ${CARD}`}>
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{status.title}</h2>
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-zinc-600">{status.body}</p>
+              </div>
+              <a
+                href={REPO}
+                className="mt-6 flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700 sm:mt-8 sm:inline-flex sm:w-auto lg:mt-0"
+              >
+                <GitHubIcon className="size-4" />
+                See the project on GitHub
+              </a>
+            </div>
           </div>
         </section>
 
-        <section id="faq" className="bg-zinc-50 px-6 pb-32">
-          <div className="mx-auto max-w-3xl">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Questions and answers</h2>
-            <div className="mt-10 divide-y divide-zinc-900/10 border-y border-zinc-900/10">
+        <section id="faq" className={`bg-zinc-50 ${SECTION_BOTTOM}`}>
+          <div className={`${CONTAINER} lg:grid lg:grid-cols-[1fr_2fr] lg:items-start lg:gap-16`}>
+            <h2 className={SECTION_TITLE}>Questions and answers</h2>
+            <div className="mt-8 divide-y divide-zinc-900/10 border-y border-zinc-900/10 lg:mt-0">
               {faqs.map((faq) => (
-                <details key={faq.question} className="group py-6">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-6 text-lg font-semibold [&::-webkit-details-marker]:hidden">
+                <details key={faq.question} className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-lg font-semibold sm:py-6 [&::-webkit-details-marker]:hidden">
                     <h3>{faq.question}</h3>
                     <svg
                       viewBox="0 0 20 20"
@@ -208,7 +254,7 @@ export default function Home() {
                       <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </summary>
-                  <p className="mt-3 text-lg leading-relaxed text-zinc-500">{faq.answer}</p>
+                  <p className="-mt-2 max-w-2xl pb-5 text-lg sm:-mt-3 sm:pb-6 leading-relaxed text-zinc-600">{faq.answer}</p>
                 </details>
               ))}
             </div>
