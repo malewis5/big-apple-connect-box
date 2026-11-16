@@ -28,14 +28,14 @@ FONT_DIR = os.path.expanduser("~/Library/Fonts")
 # sentences rather than clipped fragments, and no promise the site doesn't
 # make. The box is still being built, and advice for your home comes later.
 # Nothing here may suggest watching, tracking or monitoring a person: the box
-# measures the connection, and its results stay on the box.
+# measures the connection, never what a person does online.
 CAPTIONS = [
     (0.5, 4.7, "We're building a small box that measures your home internet."),
     (5.4, 12.6, "Setting it up only means plugging it into your router."),
     (13.3, 20.8, "It tests your connection every five minutes, day and night."),
-    (21.2, 28.8, "Each result stays on the box, so you can show what you really get."),
+    (21.2, 28.8, "Each result is saved, so you can show what you really get."),
     (29.3, 32.9, "It measures only your connection, never what you do online."),
-    (33.4, 41.0, "Later, we plan to add advice, such as a clearer Wi-Fi channel."),
+    (33.4, 41.0, "Later, an AI helper will find what's wrong, help fix what it can, and back you up when your provider blames your home."),
 ]
 END_CARD = (41.4, 45.0, "Is your internet as good as promised?", "bigappleconnect.com")
 

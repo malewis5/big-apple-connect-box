@@ -1,11 +1,13 @@
 import type { MetadataRoute } from "next";
-import { SITE_DESCRIPTION, SITE_NAME } from "./site";
+import { getContent } from "./content";
+import { SITE_NAME } from "./site";
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const { site } = await getContent();
   return {
     name: SITE_NAME,
     short_name: "Connect Box",
-    description: SITE_DESCRIPTION,
+    description: site.description,
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
