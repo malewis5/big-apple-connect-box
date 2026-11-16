@@ -17,8 +17,23 @@ video.demo-inline-captions::cue {
   visibility: hidden;
 }
 
-/* The 404 page's check rows appear one after another. */
+/* The 404 page's check rows appear one after another. The demo video's play
+   button sends out two soft rings, then rests (under five seconds of motion). */
 @theme {
+  --animate-play-halo: play-halo 2s ease-out 0.6s 2 both;
+
+  @keyframes play-halo {
+    from {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.6);
+    }
+  }
+
+
   --animate-check-in: check-in 0.5s ease-out both;
 
   @keyframes check-in {

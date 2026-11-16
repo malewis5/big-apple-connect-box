@@ -4,22 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { demoVideo } from "./site";
 import { CARD, CONTAINER, SECTION_BODY, SECTION_LEAD, SECTION_TITLE, SECTION_Y } from "./ui";
 
-// AV1 at 1080p is the smallest, for browsers that can play it; H.264 at 720p
-// plays everywhere.
+// AV1 is the smallest, for browsers that can play it; H.264 plays everywhere.
 const DEMO_VIDEO = demoVideo.files;
 
 // Many people reading this page are on the connection they want to check, so
-// the video costs nothing until it's wanted. It downloads only once it's on
-// screen, and it never starts by itself for people who ask their device for
-// less motion or to save data.
-function mayAutoplay() {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
-  const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
-    .connection;
-  if (connection?.saveData) return false;
-  if (connection?.effectiveType && /(^|-)2g$/.test(connection.effectiveType)) return false;
-  return true;
-}
+// the video never starts by itself and downloads nothing until someone presses
+// play. Until then the poster and one play button stand in for it.
 
 function setTrackMode(track: TextTrack, mode: TextTrackMode) {
   track.mode = mode;
@@ -29,66 +19,31 @@ export default function DemoVideo() {
   const video = useRef<HTMLVideoElement>(null);
   const [caption, setCaption] = useState(""); // kept while it fades out
   const [captionShown, setCaptionShown] = useState(false);
-  // It plays once, then rests on its last frame with a button to play again.
-  const [ended, setEnded] = useState(false);
+  // "idle" shows the poster and play button; "starting" keeps the poster up
+  // until the first frame arrives; "ended" rests on the last frame with a
+  // button to play again.
+  const [stage, setStage] = useState<"idle" | "starting" | "playing" | "ended">("idle");
 
   useEffect(() => {
     const el = video.current;
     if (!el) return;
-    const onEnded = () => setEnded(true);
-    const onPlay = () => setEnded(false);
+    const onEnded = () => setStage("ended");
+    const onPlaying = () => setStage("playing");
     el.addEventListener("ended", onEnded);
-    el.addEventListener("play", onPlay);
+    el.addEventListener("playing", onPlaying);
     return () => {
       el.removeEventListener("ended", onEnded);
-      el.removeEventListener("play", onPlay);
+      el.removeEventListener("playing", onPlaying);
     };
   }, []);
 
-  function playAgain() {
+  function play() {
     const el = video.current;
     if (!el) return;
-    el.currentTime = 0;
-    el.play().catch(() => {});
+    if (stage === "ended") el.currentTime = 0;
+    setStage((s) => (s === "idle" ? "starting" : s));
+    el.play().catch(() => setStage((s) => (s === "starting" ? "idle" : s)));
   }
-
-  // Play while on screen, pause when scrolled away.
-  useEffect(() => {
-    const el = video.current;
-    if (!el) return;
-    const autoplay = mayAutoplay();
-    // Once someone pauses it themselves, or it reaches the end, leave it
-    // paused until they press play again.
-    let userPaused = false;
-    let ours = false; // the next pause event is one we caused
-    const onPause = () => {
-      if (ours) ours = false;
-      else userPaused = true;
-    };
-    const onPlay = () => {
-      userPaused = false;
-    };
-    el.addEventListener("pause", onPause);
-    el.addEventListener("play", onPlay);
-    const seen = new IntersectionObserver(
-      ([entry]) => {
-        if (userPaused) return;
-        if (entry.isIntersecting) {
-          if (autoplay) el.play().catch(() => {}); // a browser may still refuse; the controls remain
-        } else if (!el.paused) {
-          ours = true;
-          el.pause();
-        }
-      },
-      { threshold: 0.5 },
-    );
-    seen.observe(el);
-    return () => {
-      seen.disconnect();
-      el.removeEventListener("pause", onPause);
-      el.removeEventListener("play", onPlay);
-    };
-  }, []);
 
   // Captions in the page's own style. Browsers draw captions their own way
   // (Chrome ignores a caption background), so CSS hides the native cues inline
@@ -132,11 +87,13 @@ export default function DemoVideo() {
     };
   }, []);
 
+  const covered = stage === "idle" || stage === "starting";
+
   return (
     // Lined up with the other sections. On a wide screen the words take the
     // left third and the video the rest, the same split as the questions
-    // below, so the two fit on one screen together; on a narrow one the video
-    // sits under the words at full width.
+    // below; on a narrow one the video sits under the words at the column's
+    // full width.
     <section id="demo" aria-labelledby="demo-title" className={`bg-white ${SECTION_Y}`}>
       <div className={`${CONTAINER} lg:grid lg:grid-cols-[1fr_2fr] lg:items-center lg:gap-16`}>
         <div>
@@ -145,17 +102,18 @@ export default function DemoVideo() {
           </h2>
           <p className={SECTION_LEAD}>{demoVideo.body}</p>
         </div>
-        <div className={`relative ${SECTION_BODY} w-full min-w-0 overflow-hidden [container-type:inline-size] lg:mt-0 ${CARD}`}>
+        <div
+          className={`relative ${SECTION_BODY} w-full min-w-0 overflow-hidden [container-type:inline-size] lg:mt-0 ${CARD}`}
+        >
           <video
             ref={video}
-            className="block aspect-video w-full"
+            className="block aspect-video w-full bg-zinc-100 object-cover"
             width={1920}
             height={1080}
-            poster={DEMO_VIDEO.poster}
             preload="none"
             muted
             playsInline
-            controls={!ended}
+            controls={stage === "playing"}
             aria-label={demoVideo.label}
           >
             <source src={DEMO_VIDEO.webm} type='video/webm; codecs="av01.0.08M.10"' />
@@ -170,25 +128,74 @@ export default function DemoVideo() {
             </p>
           </video>
           {/* Sized to the video's width, like the captions in the shared copies:
-              about 2.4% of the width, a little larger on small screens. The
-              words are also in the track and on the Markdown page. */}
+              about 2.4% of the width, and small and tucked low on a phone. The words are also in
+              the track and on the Markdown page. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-[16%] flex justify-center px-[4%]"
+            className="pointer-events-none absolute inset-x-0 bottom-[16%] flex justify-center px-[4%] max-sm:bottom-[7%] max-sm:px-3"
           >
             <p
-              className={`max-w-full rounded-full bg-white/95 px-[1.1em] py-[0.45em] text-center text-[max(0.8rem,2.4cqw)] leading-snug font-medium text-pretty text-zinc-900 shadow-sm transition-opacity duration-300 motion-reduce:transition-none ${captionShown ? "opacity-100" : "opacity-0"}`}
+              className={`max-w-full rounded-full bg-white/95 px-[1.1em] py-[0.45em] text-center text-[max(0.8rem,2.4cqw)] leading-snug font-medium text-pretty text-zinc-900 shadow-sm transition-opacity duration-300 motion-reduce:transition-none max-sm:rounded-2xl max-sm:px-2.5 max-sm:py-1 max-sm:text-[0.6875rem] ${captionShown ? "opacity-100" : "opacity-0"}`}
             >
               {caption || "\u00a0"}
             </p>
           </div>
+          {/* Before it plays: the poster, and one large
+              light button over it. The whole picture is the target. */}
+          {covered && (
+            <button
+              type="button"
+              onClick={play}
+              aria-label={`Play the ${demoVideo.seconds}-second video`}
+              className="group absolute inset-0 flex cursor-pointer items-center justify-center focus-visible:outline-offset-[-4px]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- the poster is a pre-sized WebP; the optimizer adds nothing */}
+              <img
+                src={DEMO_VIDEO.poster}
+                alt=""
+                className={`absolute inset-0 size-full object-cover transition duration-500 ease-out group-hover:scale-[1.02] motion-reduce:transition-none ${stage === "starting" ? "opacity-90" : ""}`}
+              />
+              <span aria-hidden="true" className="absolute inset-0 bg-zinc-950/10 transition-colors duration-300 group-hover:bg-zinc-950/0" />
+              {/* The circle sits at the exact center; the label hangs below it. */}
+              <span className="relative">
+                <span className="relative flex size-16 items-center justify-center sm:size-24">
+                  {stage === "idle" && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 animate-play-halo rounded-full bg-white motion-reduce:hidden"
+                    />
+                  )}
+                  <span className="relative flex size-full items-center justify-center rounded-full bg-white/95 text-zinc-900 shadow-[0_8px_30px_-6px_rgb(0_0_0/0.35)] ring-1 ring-zinc-900/10 backdrop-blur-sm transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white group-active:scale-95 motion-reduce:transition-none">
+                    {stage === "starting" ? (
+                      <span
+                        aria-hidden="true"
+                        className="size-7 animate-spin rounded-full border-[3px] border-zinc-300 border-t-zinc-900 motion-reduce:animate-none"
+                      />
+                    ) : (
+                      // The triangle's centroid (not its box) sits at the
+                      // viewBox center, which is where it looks centered.
+                      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-7 sm:size-9" fill="currentColor">
+                        <path d="M8 5.6v12.8a1 1 0 0 0 1.5.86l10.2-6.4a1 1 0 0 0 0-1.72L9.5 4.74A1 1 0 0 0 8 5.6Z" />
+                      </svg>
+                    )}
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="absolute top-full left-1/2 mt-2 -translate-x-1/2 sm:mt-3 rounded-full bg-white/95 px-3 py-1 whitespace-nowrap text-sm font-medium text-zinc-900 tabular-nums shadow-sm ring-1 ring-zinc-900/10"
+                >
+                  Watch &middot; 0:{String(demoVideo.seconds).padStart(2, "0")}
+                </span>
+              </span>
+            </button>
+          )}
           {/* At the end, one light button over the last frame, like the
               caption pills. The player's dark controls hide meanwhile. */}
-          {ended && (
+          {stage === "ended" && (
             <div className="absolute inset-0 flex items-center justify-center">
               <button
                 type="button"
-                onClick={playAgain}
+                onClick={play}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-sm font-medium text-zinc-900 shadow-sm ring-1 ring-zinc-900/10 transition hover:bg-white"
               >
                 <svg
