@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { FRAMES, FramePlayer, POSTER_SRC, POSTER_SRCSET } from "./frame-player";
-import { storySteps } from "./site";
 
 // The box's motion, from design/box/build_box.py, runs over 180 frames,
 // pre-rendered by scripts/build-frames.mjs.
@@ -12,14 +11,20 @@ type Step = { from: number; to: number; title: string; body: string };
 
 // Frame ranges follow the animation: the Pi settles (1-26), the case
 // closes (34-78), the cables plug in (92-138), the light turns on (140-150).
-// The captions live in site.ts, shared with the Markdown version of the page.
+//
+// Not on the home page since the November 2026 rebuild, which shows a short
+// "How it works" and the demo video while the box can't be had yet. Kept for
+// when it can. To bring it back, pass four captions, one per range below; the
+// earlier ones are in git history (app/site.ts, `storySteps`, before 2026-11-16).
 const FRAME_RANGES = [
   [-FADE, 30],
   [34, 86],
   [90, 138],
   [140, Infinity],
 ];
-const steps: Step[] = storySteps.map((step, k) => ({ from: FRAME_RANGES[k][0], to: FRAME_RANGES[k][1], ...step }));
+type Caption = { title: string; body: string };
+const withFrames = (captions: Caption[]): Step[] =>
+  captions.map((step, k) => ({ from: FRAME_RANGES[k][0], to: FRAME_RANGES[k][1], ...step }));
 
 // Where each step begins, for the progress bars. The last entry is the end.
 const STARTS = [0, 34, 90, 140, FRAMES - 1];
@@ -52,7 +57,7 @@ function clamp(value: number) {
 
 type Layout = { ranges: number[][]; starts: number[]; fade: number; frames: number };
 const LAYOUT: Layout = {
-  ranges: steps.map((step) => [step.from, Math.min(step.to, 1e9)]),
+  ranges: FRAME_RANGES.map(([from, to]) => [from, Math.min(to, 1e9)]),
   starts: STARTS,
   fade: FADE,
   frames: FRAMES,
@@ -123,7 +128,8 @@ const EASE = 12;
 // playing the animation to catch up.
 const JUMP = 24;
 
-export default function BoxStory() {
+export default function BoxStory({ lines }: { lines: Caption[] }) {
+  const steps = withFrames(lines);
   const section = useRef<HTMLElement>(null);
   const pinned = useRef<HTMLDivElement>(null);
   const captions = useRef<(HTMLDivElement | null)[]>([]);

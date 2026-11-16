@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "./info-page";
+import { getContent } from "./content";
 import { RequestedPath } from "./requested-path";
-import { infoPages, notFound } from "./site";
 
 // The layout tells search engines to index every page and points the
 // canonical at the home page. Neither fits a missing page, so override both.
-export const metadata: Metadata = {
-  title: "Page not found",
-  alternates: { canonical: null },
-  robots: { index: false, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { notFound } = await getContent();
+  return {
+    title: notFound.metaTitle,
+    alternates: { canonical: null },
+    robots: { index: false, follow: true },
+  };
+}
 
 // A green dot with a slow, soft ring: "connected". Same as the dot in the header.
 function LiveDot({ className }: { className: string }) {
@@ -48,7 +51,8 @@ function MissingIcon() {
 // The words sit beside a quick check from the box: your internet works, the
 // site works, only this page is missing. On phones the check is a short,
 // plain list under the button, with no card.
-export default function NotFound() {
+export default async function NotFound() {
+  const { notFound, pages } = await getContent();
   const { check } = notFound;
   return (
     <div className="flex flex-1 flex-col bg-white text-zinc-900">
@@ -60,20 +64,17 @@ export default function NotFound() {
         <div className="min-w-0">
           <p className="inline-flex rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-600">{notFound.eyebrow}</p>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight text-balance break-words sm:text-6xl lg:mt-6 lg:text-7xl">{notFound.title}</h1>
-          <p className="mt-4 max-w-lg text-lg leading-relaxed text-pretty text-zinc-600 lg:mt-6 lg:text-xl">
-            {notFound.body}
-          </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-5 lg:mt-10">
             <Link
               href="/"
               className="inline-flex items-center gap-2 rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700"
             >
               <span aria-hidden="true">←</span>
-              Back to the home page
+              {notFound.back}
             </Link>
             {/* Wide screens only: the footer has the same links. */}
-            <nav aria-label="Other pages" className="hidden gap-2 text-sm font-medium text-zinc-600 lg:flex">
-              {infoPages.map((page) => (
+            <nav aria-label={notFound.otherPages} className="hidden gap-2 text-sm font-medium text-zinc-600 lg:flex">
+              {pages.map((page) => (
                 <Link key={page.slug} href={`/${page.slug}`} className="inline-flex min-h-11 items-center px-2 underline-offset-4 hover:text-zinc-900 hover:underline">
                   {page.title}
                 </Link>

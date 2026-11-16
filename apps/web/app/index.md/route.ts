@@ -1,5 +1,5 @@
 import { MARKDOWN_HEADERS, homeMarkdown } from "../markdown";
 
-export function GET() {
-  return new Response(homeMarkdown(), { headers: MARKDOWN_HEADERS("/") });
+export async function GET() {
+  return new Response(await homeMarkdown(), { headers: MARKDOWN_HEADERS("/") });
 }

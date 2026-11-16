@@ -1,11 +1,15 @@
 import { ImageResponse } from "next/og";
+import { getContent } from "./content";
 import { SITE_NAME } from "./site";
 
+// The alt text has to be known before the image is drawn, so it is written
+// here; keep it the same as the hero's title in messages/en.json.
 export const alt = `${SITE_NAME}: Is your internet as good as promised?`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OpengraphImage() {
+export default async function OpengraphImage() {
+  const { hero } = await getContent();
   return new ImageResponse(
     (
       <div
@@ -44,10 +48,10 @@ export default function OpengraphImage() {
               fontSize: 28,
             }}
           >
-            For homes in New York City public housing
+            {hero.eyebrow}
           </div>
           <div style={{ fontSize: 84, fontWeight: 600, letterSpacing: -2, lineHeight: 1.05 }}>
-            Is your internet as good as promised?
+            {hero.title}
           </div>
         </div>
         <div style={{ display: "flex", fontSize: 28, color: "#71717a" }}>bigappleconnect.com</div>

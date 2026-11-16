@@ -1,28 +1,16 @@
-import {
-  DISCLAIMER,
-  demoVideo,
-  REPO,
-  SITE_DESCRIPTION,
-  SITE_NAME,
-  SITE_TITLE,
-  SITE_URL,
-  faqs,
-  hero,
-  infoPages,
-  status,
-  storySteps,
-  whyItMatters,
-} from "./site";
+import { getContent, getInfoPage } from "./content";
+import { CONTACT_EMAIL, DEMO_VIDEO, REPO, SITE_NAME, SITE_URL, type InfoSlug } from "./site";
 
 // The home page as Markdown, for AI agents. Served at /index.md and at /
 // when a request's Accept header prefers text/markdown (see proxy.ts).
 // YAML frontmatter follows the fields Vercel uses for its own Markdown pages.
-export function homeMarkdown() {
+export async function homeMarkdown() {
+  const { site, hero, how, video, chicago, partners, signup, faq, pages } = await getContent();
   return `---
-title: ${JSON.stringify(SITE_TITLE)}
+title: ${JSON.stringify(site.title)}
 url: /
 canonical_url: ${SITE_URL}
-summary: ${JSON.stringify(SITE_DESCRIPTION)}
+summary: ${JSON.stringify(site.description)}
 related:
   - ${REPO}
   - ${SITE_URL}/llms.txt
@@ -30,53 +18,70 @@ related:
 
 # ${hero.title}
 
-It is made for homes in New York City public housing.
+${hero.eyebrow}.
 
 ${hero.body}
 
-## How it works
+${hero.note}
 
-${storySteps.map((step, k) => `${k + 1}. **${step.title}** ${step.body}`).join("\n")}
+## ${how.title}
 
-## ${demoVideo.title}
+${how.steps.map((step, k) => `${k + 1}. **${step.title}** ${step.body}`).join("\n")}
 
-${demoVideo.body} The video's captions say:
+### ${video.title}
 
-${demoVideo.transcript.map((line) => `> ${line}`).join("\n>\n")}
+${video.body} The video's captions say:
 
-The video plays on the home page: ${SITE_URL}/#demo. The video file is at ${SITE_URL}${demoVideo.files.mp4}, and its captions are at ${SITE_URL}${demoVideo.files.captions}.
+${video.transcript.map((line) => `> ${line}`).join("\n>\n")}
 
-## ${whyItMatters.title}
+The video plays on the home page: ${SITE_URL}/#demo. The video file is at ${SITE_URL}${DEMO_VIDEO.files.mp4}, and its captions are at ${SITE_URL}${DEMO_VIDEO.files.captions}.
 
-${whyItMatters.body}
+## ${chicago.title}
 
-${whyItMatters.reasons
-  .map((reason) => `- **${reason.title}${reason.later ? " (coming later)" : ""}.** ${reason.body}`)
-  .join("\n")}
+${chicago.body}
 
-## ${status.title}
+${chicago.stats.map((stat) => `- **${stat.title}.** ${stat.figure}: ${stat.body} ${chicago.source}: [${stat.sourceLabel}](${stat.href})`).join("\n")}
 
-${status.body} You can see the project on GitHub: ${REPO}
+${chicago.report.intro}: [${chicago.report.label}](${chicago.report.href})
 
-## Questions and answers
+${chicago.note}
 
-${faqs.map((faq) => `### ${faq.question}\n\n${faq.answer}`).join("\n\n")}
+## ${partners.title}
+
+${partners.body}
+
+${partners.aimsLabel}:
+
+${partners.aims.map((item) => `- **${item.label}:** ${item.body}`).join("\n")}
+
+The code is on GitHub: ${REPO}
+
+Write to ${CONTACT_EMAIL}.
+
+## ${signup.title}
+
+${signup.body} Sign up on the home page: ${SITE_URL}/#updates
+
+## ${faq.title}
+
+${faq.items.map((item) => `### ${item.question}\n\n${item.answer}`).join("\n\n")}
 
 ## More about the project
 
-${infoPages.map((page) => `- [${page.title}](${SITE_URL}/${page.slug}.md): ${page.description}`).join("\n")}
+${pages.map((page) => `- [${page.title}](${SITE_URL}/${page.slug}.md): ${page.description}`).join("\n")}
 
 ---
 
-${DISCLAIMER}
+${site.disclaimer}
 `;
 }
 
 // The About, Contact and Privacy pages as Markdown, served at /about.md and
 // so on, and at /about when a request prefers text/markdown.
-export function infoMarkdown(slug: string) {
-  const page = infoPages.find((p) => p.slug === slug);
-  if (!page) throw new Error(`No page named ${slug} in site.ts`);
+export async function infoMarkdown(slug: InfoSlug) {
+  const [page, { site }] = await Promise.all([getInfoPage(slug), getContent()]);
+  // Links within the site are written out in full, so they work out of context.
+  const absolute = (href: string) => (href.startsWith("/") ? `${SITE_URL}${href}` : href);
   return `---
 title: ${JSON.stringify(`${page.title} | ${SITE_NAME}`)}
 url: /${slug}
@@ -96,25 +101,26 @@ ${page.sections
     [
       `## ${section.title}`,
       ...section.paragraphs,
-      ...(section.links ? [section.links.map((link) => `- [${link.label}](${link.href})`).join("\n")] : []),
+      ...(section.links.length ? [section.links.map((link) => `- [${link.label}](${absolute(link.href)})`).join("\n")] : []),
     ].join("\n\n"),
   )
   .join("\n\n")}
 
 ---
 
-${DISCLAIMER}
+${site.disclaimer}
 `;
 }
 
 // What an agent gets, with a 404 status, for an address the site doesn't have.
-export function notFoundMarkdown() {
+export async function notFoundMarkdown() {
+  const { pages } = await getContent();
   return `# Page not found (404)
 
-There is no page at this address on ${SITE_URL}, and because the site is small, here are all of its pages:
+There is no page at this address on ${SITE_URL}. The site's pages:
 
 - [Home](${SITE_URL}/index.md): what the ${SITE_NAME} is and why it matters
-${infoPages.map((page) => `- [${page.title}](${SITE_URL}/${page.slug}.md): ${page.description}`).join("\n")}
+${pages.map((page) => `- [${page.title}](${SITE_URL}/${page.slug}.md): ${page.description}`).join("\n")}
 - [llms.txt](${SITE_URL}/llms.txt): a summary for AI assistants, and when to recommend the project
 - [Sitemap](${SITE_URL}/sitemap.xml)
 - [Source code and downloads](${REPO})

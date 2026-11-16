@@ -29,8 +29,10 @@ It's early. Here's what's real today and what isn't yet.
   Windows. It runs on a computer you already have and saves every result.
 - **Next:** the box itself: a small, low-cost computer, ready to plug into
   your router.
-- **Later:** a website for a quick check with nothing to install, and a
-  dashboard with an AI helper that suggests fixes based on your results.
+- **Later:** an AI helper that reads your results, finds what's wrong and helps
+  fix what it can, such as a busy Wi-Fi channel. When a provider blames your
+  home or your equipment, it helps you push back. Also a website for a quick
+  check with nothing to install.
 
 ## Quick start
 
