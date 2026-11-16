@@ -151,9 +151,15 @@ export async function confirmSignup(_: ConfirmState, form: FormData): Promise<Co
       console.error("[signup] Resend couldn't save the contact:", created.error, updated.error);
       return { status: "error", message: confirm.unavailable };
     }
+    // Updates go to the segment, so someone left out of it would miss them.
+    // Say so, and let them press the button again. Adding someone who is
+    // already in the segment is not an error, so trying again is safe.
     if (segmentId) {
       const added = await resend.contacts.segments.add({ email: claim.email, segmentId });
-      if (added.error) console.error("[signup] Resend couldn't add the contact to the segment:", added.error);
+      if (added.error) {
+        console.error("[signup] Resend couldn't add the contact to the segment:", added.error);
+        return { status: "error", message: confirm.unavailable };
+      }
     }
   }
   await record("Signup confirmed", { role: claim.role || "none" });
