@@ -81,7 +81,12 @@ func runDaemon(db *store.Store) error {
 
 	t := &targets{}
 	go runSchedule(db, t)
-	runMonitor(ctx, db, runID, t)
+	ping := func() []collector.Ping { return collector.PingAll(t.get()) }
+	save := func(pings []collector.Ping) error { return db.SavePings(runID, pings) }
+	if err := runMonitor(ctx, ping, save); err != nil {
+		// Some pings were lost, so the run is left without a clean stop.
+		return fmt.Errorf("monitor run %d: save the last pings: %w", runID, err)
+	}
 	return db.StopMonitor(runID, time.Now())
 }
 
@@ -105,35 +110,36 @@ func runSchedule(db *store.Store, t *targets) {
 }
 
 // runMonitor pings every target each interval until ctx is done, saving the
-// pings in batches and once more before it returns.
-func runMonitor(ctx context.Context, db *store.Store, runID int64, t *targets) {
+// pings in batches and once more before it returns. It returns an error only
+// when that last save fails, meaning pings were lost.
+func runMonitor(ctx context.Context, ping func() []collector.Ping, save func([]collector.Ping) error) error {
 	ticker := time.NewTicker(collector.MonitorInterval)
 	defer ticker.Stop()
 
 	var batch []collector.Ping
 	saved := time.Now()
-	save := func() {
+	flush := func() error {
 		if len(batch) == 0 {
-			return
+			return nil
 		}
 		// On failure the batch is kept and tried again with the next one.
-		if err := db.SavePings(runID, batch); err != nil {
-			log.Print(err)
-			return
+		if err := save(batch); err != nil {
+			return err
 		}
 		batch, saved = nil, time.Now()
+		return nil
 	}
 
 	for {
-		gateway, lastMile := t.get()
-		batch = append(batch, collector.PingAll(gateway, lastMile)...)
+		batch = append(batch, ping()...)
 		if time.Since(saved) >= monitorSaveEvery {
-			save()
+			if err := flush(); err != nil {
+				log.Print(err)
+			}
 		}
 		select {
 		case <-ctx.Done():
-			save()
-			return
+			return flush()
 		case <-ticker.C:
 		}
 	}
