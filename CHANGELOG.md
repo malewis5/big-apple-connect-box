@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/malewis5/big-apple-connect-box/compare/v0.0.3...v0.0.4) (2026-11-17)
+
+
+### Features
+
+* ping the router and internet every 10 seconds in daemon mode ([#40](https://github.com/malewis5/big-apple-connect-box/issues/40)) ([3239e1d](https://github.com/malewis5/big-apple-connect-box/commit/3239e1d65b1a31e0dc5de34e5975af2d866bdc86))
+
 ## [0.0.3](https://github.com/malewis5/big-apple-connect-box/compare/v0.0.2...v0.0.3) (2026-11-13)
 
 
