@@ -1,4 +1,5 @@
-// Package store saves scans to a SQLite database.
+// Package store saves scans and the ping monitor's pings to a SQLite
+// database.
 package store
 
 import (
@@ -51,6 +52,35 @@ CREATE TABLE IF NOT EXISTS observations (
 	attribute TEXT NOT NULL,
 	value     TEXT NOT NULL,
 	raw       TEXT
+) STRICT;
+
+-- One run of the ping monitor, from when it started to when it stopped.
+-- stopped_at is empty when the program did not stop cleanly, such as a power
+-- cut; the run's last ping shows when it stopped.
+CREATE TABLE IF NOT EXISTS monitor_runs (
+	id           INTEGER PRIMARY KEY,
+	started_at   TEXT NOT NULL,
+	stopped_at   TEXT,
+	tool_version TEXT NOT NULL,
+	os           TEXT NOT NULL,
+	arch         TEXT NOT NULL,
+	interval_ms  INTEGER NOT NULL,
+	command      TEXT NOT NULL -- the ping command, with the address shown as <target>
+) STRICT;
+
+-- One ping the monitor sent, and what came back.
+CREATE TABLE IF NOT EXISTS pings (
+	id          INTEGER PRIMARY KEY,
+	run_id      INTEGER NOT NULL REFERENCES monitor_runs (id),
+	subject     TEXT NOT NULL,
+	target      TEXT NOT NULL,
+	started_at  TEXT NOT NULL,
+	finished_at TEXT NOT NULL,
+	rtt_ms      TEXT,
+	ttl         TEXT,
+	raw         TEXT,
+	output      TEXT,
+	error       TEXT
 ) STRICT;
 `
 
@@ -133,6 +163,43 @@ func insertProbe(tx *sql.Tx, scanID int64, p *collector.Probe, concurrentWith in
 		}
 	}
 	return id, nil
+}
+
+// StartMonitor records that the ping monitor has started and returns the
+// run's id.
+func (s *Store) StartMonitor(at time.Time, interval time.Duration, command string) (int64, error) {
+	res, err := s.db.Exec(`INSERT INTO monitor_runs
+		(started_at, tool_version, os, arch, interval_ms, command) VALUES (?, ?, ?, ?, ?, ?)`,
+		timestamp(at), collector.Version(), runtime.GOOS, runtime.GOARCH, interval.Milliseconds(), command)
+	if err != nil {
+		return 0, fmt.Errorf("start monitor run: %w", err)
+	}
+	return res.LastInsertId()
+}
+
+// SavePings writes a batch of pings for a monitor run, all or nothing.
+func (s *Store) SavePings(runID int64, pings []collector.Ping) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no effect once committed
+	for _, p := range pings {
+		if _, err := tx.Exec(`INSERT INTO pings
+			(run_id, subject, target, started_at, finished_at, rtt_ms, ttl, raw, output, error)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			runID, p.Subject, p.Target, timestamp(p.StartedAt), timestamp(p.FinishedAt),
+			nullable(p.RTT), nullable(p.TTL), nullable(p.Raw), nullable(p.Output), nullable(p.Err)); err != nil {
+			return fmt.Errorf("insert ping %s: %w", p.Target, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// StopMonitor records that a monitor run stopped cleanly.
+func (s *Store) StopMonitor(runID int64, at time.Time) error {
+	_, err := s.db.Exec(`UPDATE monitor_runs SET stopped_at = ? WHERE id = ?`, timestamp(at), runID)
+	return err
 }
 
 func timestamp(t time.Time) string { return t.UTC().Format(timeFormat) }
