@@ -21,7 +21,7 @@ for and how to download the program, start with the
 ```sh
 ./big-apple-connect-box               # one full scan
 ./big-apple-connect-box -kind light   # one light scan, about 10 seconds
-./big-apple-connect-box -daemon       # keep running: light every 5 minutes, full every hour
+./big-apple-connect-box -daemon       # keep running: ping every 10 seconds, light every 5 minutes, full every hour
 ./big-apple-connect-box -version      # print the version
 ```
 
@@ -110,9 +110,27 @@ schedule, settings and result names match, so results can be compared.
 One measurement is added to Netrics' set: the router is pinged too, both idle
 and during each half of the speed test.
 
+## The ping monitor
+
+With `-daemon`, the program also sends one ping every 10 seconds to each of:
+the router, the provider's first stop, `1.1.1.1` and `8.8.8.8`. It uses the
+system's `ping`, the same as a scan. The router and first-stop addresses come
+from the latest scan that found them, so for the first minute, until the
+first full scan finishes, only the two internet addresses are pinged.
+
+Every ping is kept, answered or not. The monitor doesn't decide whether the
+connection was up or count outages. Those are worked out afterwards from the
+pings, by whatever rule the reader chooses.
+
+Pings are written to the database once a minute, so a power cut loses at most
+the last minute. Each start of the monitor is recorded, and so is a clean
+stop (Ctrl+C, or the system stopping the program), so the time it wasn't
+running shows as a gap.
+
 ## The database
 
-`evidence.db` is a [SQLite](https://sqlite.org) file with three tables.
+`evidence.db` is a [SQLite](https://sqlite.org) file. Scans use three
+tables.
 
 - A **scan** is one run.
 - A **probe** is one thing the program did: a command run, a page requested, a
@@ -194,6 +212,21 @@ speed test points at the speed-test probe through `concurrent_with_probe_id`.
 Where a command prints more than is needed, the program keeps the needed parts.
 From a device's pages it keeps the labelled maker, model and serial rows.
 
+### Monitor tables
+
+The ping monitor uses two more tables.
+
+- **`monitor_runs`:** one row each time the monitor starts: `started_at`,
+  `stopped_at` (empty if it didn't stop cleanly; the run's last ping shows
+  when it ended), `tool_version`, `os`, `arch`, `interval_ms`, and `command`,
+  the ping command with the address shown as `<target>`.
+- **`pings`:** one row per ping: `run_id`, `subject` (`gateway`, `last_mile`
+  or `internet`), `target`, `started_at`, `finished_at`, then `rtt_ms` and
+  `ttl` as reported and `raw`, the reply line they were read from. When no
+  reply line was found, those three are empty and `output` holds everything
+  `ping` printed. `error` is the error returned, if any. Windows reports a
+  round-trip time under a millisecond as `<1`, and it is kept that way.
+
 ## Outside services
 
 | Service | Used for | What it receives |
@@ -202,7 +235,7 @@ From a device's pages it keeps the labelled maker, model and serial rows.
 | ipinfo.io | Provider and public address | A request from this connection |
 | api.macvendors.com | Router's manufacturer | The first three octets of the router's hardware address |
 | 8.8.8.8 | Name-lookup timing | Lookups of five well-known site names |
-| 1.1.1.1, 8.8.8.8, www.google.com | Ping and route trace | Pings |
+| 1.1.1.1, 8.8.8.8, www.google.com | Ping and route trace | Pings. With `-daemon`, one ping every 10 seconds to 1.1.1.1 and 8.8.8.8. |
 
 ## Build from source
 
