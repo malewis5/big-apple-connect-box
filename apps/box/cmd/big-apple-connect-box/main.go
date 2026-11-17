@@ -4,11 +4,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -21,6 +25,11 @@ const (
 	lightInterval = 5 * time.Minute // Netrics' schedule for light measurements
 	scansPerFull  = 12              // one full scan an hour
 	maxTargetLen  = 44              // width of the report's target column
+
+	// monitorSaveEvery is how often the monitor's pings are written to the
+	// database. Writing in batches spares a Raspberry Pi's memory card; a
+	// power cut loses at most this much.
+	monitorSaveEvery = time.Minute
 )
 
 func main() {
@@ -32,7 +41,7 @@ func main() {
 
 func run() error {
 	kind := flag.String("kind", collector.KindFull, "scan to run once: full or light")
-	daemon := flag.Bool("daemon", false, "keep running: a light scan every 5 minutes, a full scan every hour")
+	daemon := flag.Bool("daemon", false, "keep running: a ping every 10 seconds, a light scan every 5 minutes, a full scan every hour")
 	version := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *version {
@@ -50,27 +59,110 @@ func run() error {
 	defer db.Close()
 
 	if *daemon {
-		runSchedule(db) // runs until the process is stopped
+		return runDaemon(db)
 	}
 	scan, err := runScan(db, *kind)
 	report(os.Stdout, scan)
 	return err
 }
 
+// runDaemon runs the scan schedule and the ping monitor until the program is
+// told to stop (Ctrl+C, or the system stopping it), then records that the
+// monitor stopped. A scan still in progress at that moment is not saved.
+func runDaemon(db *store.Store) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	runID, err := db.StartMonitor(time.Now(), collector.MonitorInterval, collector.PingCommand())
+	if err != nil {
+		return err
+	}
+	fmt.Printf("monitor run %d: pinging every %s\n", runID, collector.MonitorInterval)
+
+	t := &targets{}
+	go runSchedule(db, t)
+	runMonitor(ctx, db, runID, t)
+	return db.StopMonitor(runID, time.Now())
+}
+
 // runSchedule scans until the process is stopped: a full scan first and
-// then every hour, a light scan every five minutes between.
-func runSchedule(db *store.Store) {
+// then every hour, a light scan every five minutes between. Each scan
+// updates the addresses the monitor pings.
+func runSchedule(db *store.Store, t *targets) {
 	for n := 0; ; n++ {
 		kind := collector.KindLight
 		if n%scansPerFull == 0 {
 			kind = collector.KindFull
 		}
 		started := time.Now()
-		if _, err := runScan(db, kind); err != nil {
+		scan, err := runScan(db, kind)
+		if err != nil {
 			log.Print(err)
 		}
+		t.update(scan)
 		time.Sleep(time.Until(started.Add(lightInterval)))
 	}
+}
+
+// runMonitor pings every target each interval until ctx is done, saving the
+// pings in batches and once more before it returns.
+func runMonitor(ctx context.Context, db *store.Store, runID int64, t *targets) {
+	ticker := time.NewTicker(collector.MonitorInterval)
+	defer ticker.Stop()
+
+	var batch []collector.Ping
+	saved := time.Now()
+	save := func() {
+		if len(batch) == 0 {
+			return
+		}
+		// On failure the batch is kept and tried again with the next one.
+		if err := db.SavePings(runID, batch); err != nil {
+			log.Print(err)
+			return
+		}
+		batch, saved = nil, time.Now()
+	}
+
+	for {
+		gateway, lastMile := t.get()
+		batch = append(batch, collector.PingAll(gateway, lastMile)...)
+		if time.Since(saved) >= monitorSaveEvery {
+			save()
+		}
+		select {
+		case <-ctx.Done():
+			save()
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// targets holds the router and last-mile addresses for the monitor to ping:
+// the latest each scan found. An address a scan didn't find, such as during
+// an outage, keeps its earlier value.
+type targets struct {
+	mu                sync.Mutex
+	gateway, lastMile string
+}
+
+func (t *targets) update(scan *collector.Scan) {
+	gateway, lastMile := collector.TargetsFrom(scan)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if gateway != "" {
+		t.gateway = gateway
+	}
+	if lastMile != "" {
+		t.lastMile = lastMile
+	}
+}
+
+func (t *targets) get() (gateway, lastMile string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.gateway, t.lastMile
 }
 
 // runScan performs one scan and saves it.
