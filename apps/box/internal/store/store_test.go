@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -80,5 +81,58 @@ func TestSaveIsAllOrNothing(t *testing.T) {
 	var scans int
 	if err := s.db.QueryRow(`SELECT count(*) FROM scans`).Scan(&scans); err != nil || scans != 0 {
 		t.Fatalf("scans = %d, err = %v; want none saved", scans, err)
+	}
+}
+
+func TestMonitorRun(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "evidence.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	at := time.Date(2026, 11, 17, 15, 0, 0, 0, time.UTC)
+	runID, err := s.StartMonitor(at, 10*time.Second, "ping -c 1 <target>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply := collector.Ping{Subject: "internet", Target: "1.1.1.1", StartedAt: at, FinishedAt: at.Add(6 * time.Millisecond),
+		RTT: "5.12", TTL: "57", Raw: "64 bytes from 1.1.1.1: icmp_seq=1 ttl=57 time=5.12 ms"}
+	lost := collector.Ping{Subject: "gateway", Target: "192.168.0.1", StartedAt: at, FinishedAt: at.Add(5 * time.Second),
+		Output: "1 packets transmitted, 0 received, 100% packet loss", Err: "exit status 1"}
+	if err := s.SavePings(runID, []collector.Ping{reply, lost}); err != nil {
+		t.Fatal(err)
+	}
+
+	var stopped sql.NullString
+	if err := s.db.QueryRow(`SELECT stopped_at FROM monitor_runs WHERE id = ?`, runID).Scan(&stopped); err != nil || stopped.Valid {
+		t.Fatalf("stopped_at = %v, err = %v; want empty while running", stopped, err)
+	}
+	if err := s.StopMonitor(runID, at.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	count := func(query string) (n int) {
+		t.Helper()
+		if err := s.db.QueryRow(query).Scan(&n); err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+		return n
+	}
+	checks := map[string]struct{ got, want int }{
+		"pings":                 {count(`SELECT count(*) FROM pings`), 2},
+		"pings with a reply":    {count(`SELECT count(*) FROM pings WHERE rtt_ms = '5.12' AND ttl = '57' AND output IS NULL AND error IS NULL`), 1},
+		"pings without a reply": {count(`SELECT count(*) FROM pings WHERE rtt_ms IS NULL AND raw IS NULL AND error = 'exit status 1'`), 1},
+		"runs stopped cleanly":  {count(`SELECT count(*) FROM monitor_runs WHERE stopped_at = '2026-11-17T15:01:00.000Z' AND interval_ms = 10000`), 1},
+	}
+	for name, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d", name, c.got, c.want)
+		}
+	}
+
+	// A ping must belong to a run.
+	if err := s.SavePings(runID+1, []collector.Ping{reply}); err == nil {
+		t.Error("a ping for a run that does not exist was saved")
 	}
 }

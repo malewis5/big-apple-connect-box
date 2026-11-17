@@ -63,7 +63,8 @@ curl.exe -L -o big-apple-connect-box.exe https://github.com/malewis5/big-apple-c
 
 A scan takes about a minute. It prints what it found and saves it to
 `evidence.db` in the current folder. Run it with `-daemon` to keep checking:
-a quick check every 5 minutes and a full scan every hour.
+a ping every 10 seconds, a quick check every 5 minutes and a full scan every
+hour.
 
 The program isn't code-signed yet, so macOS and Windows may warn about it.
 [Common problems](apps/box/README.md#common-problems) covers that, and
