@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,5 +334,19 @@ func TestRunTestCannotConnect(t *testing.T) {
 	checkText(t, "ServerFQDN", scan.ServerFQDN, "ndt.example")
 	if scan.DownloadThroughput != nil || scan.UploadThroughput != nil || scan.ClientIP != nil {
 		t.Errorf("got %+v: want nothing measured", scan.Summary)
+	}
+}
+
+// An argument the program doesn't know is an error. It must never fall
+// through to a scan, which is a real speed test.
+func TestStartUnknownArgument(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, args := range [][]string{{"pings"}, {"ping", "now"}, {"--help"}, {""}} {
+		if err := start(args); err == nil || !strings.Contains(err.Error(), "usage") {
+			t.Errorf("%q: error %v, want the usage", args, err)
+		}
+	}
+	if _, err := os.Stat(databasePath); err == nil {
+		t.Error("a database was created")
 	}
 }

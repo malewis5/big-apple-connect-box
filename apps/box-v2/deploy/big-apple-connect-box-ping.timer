@@ -1,0 +1,18 @@
+[Unit]
+Description=Ping the router and the internet every minute
+Documentation=https://github.com/malewis5/big-apple-connect-box
+
+[Timer]
+# Counted from start-up and then from the last round, not set by the clock.
+# systemd starts a timer set by the clock (OnCalendar) only after
+# time-sync.target, which install.sh makes wait for a time server, and so
+# for the internet. This one has to run when there is none.
+OnBootSec=30s
+OnUnitActiveSec=1min
+
+# Keep to the minute. By default a timer may run up to a minute late, and
+# each round is counted from the one before, so any lateness adds up.
+AccuracySec=100ms
+
+[Install]
+WantedBy=timers.target

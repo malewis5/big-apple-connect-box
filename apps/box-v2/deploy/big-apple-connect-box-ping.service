@@ -1,0 +1,26 @@
+[Unit]
+Description=Big Apple Connect Box: ping the router and the internet once and save what came back
+Documentation=https://github.com/malewis5/big-apple-connect-box
+
+# Nothing to wait for. Unlike the speed test, a round of pings runs without
+# the network and before the clock is set: "no route" and "clock not yet
+# set" are what it is there to record. Each row carries the boot id and the
+# seconds since start-up, which place it in time once the clock is set.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/big-apple-connect-box ping
+
+# Its own account, with nothing else on the system writable.
+User=big-apple-connect-box
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+# The pings go in the same scans.db as the speed tests, in the working
+# directory: /var/lib/big-apple-connect-box.
+StateDirectory=big-apple-connect-box
+WorkingDirectory=%S/big-apple-connect-box
+
+# A round is three pings that each wait up to 2 seconds. Stop one that hangs.
+TimeoutStartSec=30s

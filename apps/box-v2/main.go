@@ -1,5 +1,7 @@
 // Command big-apple-connect-box runs one M-Lab speed test (NDT7: a download,
-// then an upload) and saves M-Lab's summary of it to scans.db.
+// then an upload) and saves M-Lab's summary of it to scans.db. Run as
+// "big-apple-connect-box ping", it instead pings the router and the internet
+// once each and saves what came back.
 package main
 
 import (
@@ -7,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/m-lab/ndt7-client-go"
@@ -26,9 +29,22 @@ const (
 
 func main() {
 	log.SetFlags(0)
-	if err := run(databasePath, mlab{ndt7.NewClient(clientName, version)}); err != nil {
+	if err := start(os.Args[1:]); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// start does what the arguments ask for: a scan when there are none, and a
+// round of pings for "ping". Anything else is an error, so that a mistyped
+// argument never runs a speed test.
+func start(args []string) error {
+	switch {
+	case len(args) == 0:
+		return run(databasePath, mlab{ndt7.NewClient(clientName, version)})
+	case len(args) == 1 && args[0] == "ping":
+		return runPings(databasePath, system{})
+	}
+	return errors.New("usage: big-apple-connect-box [ping]")
 }
 
 // run runs one scan with client and saves it to the database at path. A scan

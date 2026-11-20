@@ -3,7 +3,7 @@ package main
 import "runtime/debug"
 
 // version is the build of this program. It is reported to M-Lab and saved
-// with every scan.
+// with every scan and every ping.
 var version = versionOf(debug.ReadBuildInfo())
 
 // versionOf reads the commit that `go build` records in a program. It returns
