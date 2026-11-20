@@ -79,7 +79,8 @@ func makeSummary(fqdn string, results map[spec.TestKind]*ndt7.LatestMeasurements
 	return s
 }
 
-// text returns nil for an empty string, which M-Lab's client leaves unset.
+// text returns nil for an empty string: a value M-Lab's client left unset,
+// or the error of a scan that passed.
 func text(v string) *string {
 	if v == "" {
 		return nil

@@ -11,14 +11,16 @@ import (
 // Times are stored as UTC with millisecond precision.
 const timeFormat = "2006-01-02T15:04:05.000Z"
 
-// One row per scan. Every column after passed is M-Lab's summary field of
+// One row per scan. Every column after error is M-Lab's summary field of
 // the same name; NULL where M-Lab's client left it unset.
 const schema = `
 CREATE TABLE IF NOT EXISTS scans (
 	id                     INTEGER PRIMARY KEY,
 	started_at             TEXT    NOT NULL,
 	completed_at           TEXT    NOT NULL,
+	version                TEXT    NOT NULL, -- the build of this program that ran the scan
 	passed                 INTEGER NOT NULL CHECK (passed IN (0, 1)),
+	error                  TEXT,             -- why the scan failed; NULL when it passed
 	ServerFQDN             TEXT,
 	ServerIP               TEXT,
 	ClientIP               TEXT,
@@ -36,9 +38,13 @@ CREATE TABLE IF NOT EXISTS scans (
 type Scan struct {
 	StartedAt   time.Time
 	CompletedAt time.Time
+	// Version is the build of this program that ran the scan.
+	Version string
 	// Passed is true when the download and the upload both started and both
 	// ran to completion.
 	Passed bool
+	// Error is why the scan failed. It is empty when the scan passed.
+	Error string
 	Summary
 }
 
@@ -59,12 +65,13 @@ func openDB(path string) (*sql.DB, error) {
 func save(db *sql.DB, scan Scan) (int64, error) {
 	res, err := db.Exec(`
 		INSERT INTO scans (
-			started_at, completed_at, passed,
+			started_at, completed_at, version, passed, error,
 			ServerFQDN, ServerIP, ClientIP,
 			DownloadUUID, DownloadThroughput, DownloadLatency, DownloadRetransmission,
 			UploadUUID, UploadThroughput, UploadLatency
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		scan.StartedAt.UTC().Format(timeFormat), scan.CompletedAt.UTC().Format(timeFormat), scan.Passed,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		scan.StartedAt.UTC().Format(timeFormat), scan.CompletedAt.UTC().Format(timeFormat),
+		scan.Version, scan.Passed, text(scan.Error),
 		scan.ServerFQDN, scan.ServerIP, scan.ClientIP,
 		scan.DownloadUUID, scan.DownloadThroughput, scan.DownloadLatency, scan.DownloadRetransmission,
 		scan.UploadUUID, scan.UploadThroughput, scan.UploadLatency,

@@ -14,10 +14,9 @@ import (
 )
 
 const (
-	databasePath  = "scans.db"
-	clientName    = "big-apple-connect-box" // reported to M-Lab
-	clientVersion = "v2-dev"
-	testTimeout   = 55 * time.Second // M-Lab's ndt7-client default
+	databasePath = "scans.db"
+	clientName   = "big-apple-connect-box" // reported to M-Lab, with version
+	testTimeout  = 55 * time.Second        // M-Lab's ndt7-client default
 
 	// minDuration is M-Lab's own rule for a complete test: its published
 	// data counts only tests that ran at least 9 seconds. A full download or
@@ -27,38 +26,56 @@ const (
 
 func main() {
 	log.SetFlags(0)
-	if err := run(); err != nil {
+	if err := run(databasePath, mlab{ndt7.NewClient(clientName, version)}); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run() error {
-	db, err := openDB(databasePath)
+// run runs one scan with client and saves it to the database at path. A scan
+// that failed is saved too, and then returned as an error.
+func run(path string, client tester) error {
+	db, err := openDB(path)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	scan, testErr := runTest(ndt7.NewClient(clientName, clientVersion))
+	scan, testErr := runTest(client)
 	report(scan)
 	id, err := save(db, scan)
 	if err != nil {
 		return errors.Join(testErr, err)
 	}
-	fmt.Printf("scan %d saved to %s\n", id, databasePath)
+	fmt.Printf("scan %d saved to %s\n", id, path)
 	if testErr != nil {
 		return fmt.Errorf("scan %d failed: %w", id, testErr)
 	}
 	return nil
 }
 
+// A tester runs the two halves of a test and holds what they measured. It is
+// the part of M-Lab's client that a scan uses, so the tests can stand in for
+// it.
+type tester interface {
+	StartDownload(context.Context) (<-chan spec.Measurement, error)
+	StartUpload(context.Context) (<-chan spec.Measurement, error)
+	Results() map[spec.TestKind]*ndt7.LatestMeasurements
+	ServerFQDN() string
+}
+
+// mlab is M-Lab's client as a tester. The client keeps the server's name in
+// a field, so mlab adds the one method it lacks.
+type mlab struct{ *ndt7.Client }
+
+func (m mlab) ServerFQDN() string { return m.FQDN }
+
 // runTest runs the download and then the upload, as M-Lab's ndt7-client
 // does. The scan passed when the error is nil.
-func runTest(client *ndt7.Client) (Scan, error) {
+func runTest(client tester) (Scan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	scan := Scan{StartedAt: time.Now()}
+	scan := Scan{StartedAt: time.Now(), Version: version}
 	var errs []error
 	for _, t := range []struct {
 		kind  spec.TestKind
@@ -83,9 +100,13 @@ func runTest(client *ndt7.Client) (Scan, error) {
 	}
 	scan.CompletedAt = time.Now()
 
-	scan.Summary = makeSummary(client.FQDN, client.Results())
-	scan.Passed = len(errs) == 0
-	return scan, errors.Join(errs...)
+	scan.Summary = makeSummary(client.ServerFQDN(), client.Results())
+	err := errors.Join(errs...)
+	scan.Passed = err == nil
+	if err != nil {
+		scan.Error = err.Error()
+	}
+	return scan, err
 }
 
 // duration returns how long a test ran, read from the counter M-Lab's
