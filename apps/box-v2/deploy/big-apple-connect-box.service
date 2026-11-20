@@ -1,0 +1,28 @@
+[Unit]
+Description=Big Apple Connect Box: run one M-Lab speed test and save it
+Documentation=https://github.com/malewis5/big-apple-connect-box
+
+# Wait for the clock. A Raspberry Pi without a clock battery starts at 1970
+# on every boot, until it syncs over the internet, and a scan's times are
+# part of the evidence. install.sh turns on the service that makes
+# time-sync.target wait for that sync.
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/big-apple-connect-box
+
+# Its own account, with nothing else on the system writable.
+User=big-apple-connect-box
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+# scans.db is written to the working directory: /var/lib/big-apple-connect-box,
+# created by systemd and owned by the account above.
+StateDirectory=big-apple-connect-box
+WorkingDirectory=%S/big-apple-connect-box
+
+# A test takes about 20 seconds. Stop one that hangs.
+TimeoutStartSec=3min

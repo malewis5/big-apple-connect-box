@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the Big Apple Connect Box speed test every 30 minutes
+Documentation=https://github.com/malewis5/big-apple-connect-box
+
+[Timer]
+# On the hour and the half hour. This is for testing one box only.
+#
+# M-Lab's NDT7 specification asks an unattended client to wait a random time
+# between tests instead: six hours on average, at least 36 minutes and at
+# most 15 hours. Change to that before this runs on more than a test box.
+OnCalendar=*:00/30
+
+[Install]
+WantedBy=timers.target
